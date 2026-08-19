@@ -8,9 +8,9 @@ Paul (non-tech, débutant en dev) reprend une prise de masse (PDM) sérieuse en 
 
 ## Stack technique retenue
 
-- **Frontend** : React + Vite (choisi pour légèreté et adéquation PWA)
-- **Backend/DB** : Supabase (compte déjà créé par Paul, projet provisionné — demander les identifiants/clés directement à Paul, ne pas les stocker en clair dans ce fichier)
-- **Déploiement cible** : à définir avec Claude Code
+- **Frontend** : React + Vite (choisi pour légèreté et adéquation PWA) — code dans `app/`
+- **Backend/DB** : Supabase (projet `wedpdddxbeoqmnbanadc`, région eu-west-2). Clés dans `app/.env.local` (gitignored, jamais commité)
+- **Déploiement cible** : Vercel (décidé avec Paul)
 - **Environnement de dev** : Claude Code
 
 ## Supabase — déjà en place côté Paul
@@ -28,7 +28,7 @@ Un projet Supabase existe déjà avec le schéma de base de données complet et 
 **`food_log`** — journal alimentaire quotidien
 - `id`, `user_id`, `date`, `nom_aliment`, `source` (check: 'ciqual' ou 'openfoodfacts'), `poids_g`, `kcal`, `proteines_g`, `lipides_g`, `glucides_g`, `created_at`
 
-**`ciqual_foods`** — base de référence nutritionnelle française (déjà importée : **2841 aliments**)
+**`ciqual_foods`** — base de référence nutritionnelle française (importée : **3341 aliments**, total propre)
 - `id`, `code_ciqual` (unique), `nom_aliment`, `kcal_100g`, `proteines_100g`, `lipides_100g`, `glucides_100g`, `fibres_100g`, `sel_100g`, `created_at`
 
 ### Policies RLS actives
@@ -42,8 +42,9 @@ Supabase Auth email/mot de passe activé par défaut. Pas encore de code front-e
 
 ## Sources de données alimentaires
 
-1. **CIQUAL (Anses)** ✅ déjà importé (2841/3341 lignes valides — l'écart vient de doublons de `code_ciqual` filtrés automatiquement via `ON CONFLICT DO NOTHING`). Couvre bien les aliments bruts/génériques français (viandes, légumes, féculents...).
-2. **Open Food Facts** ⏳ pas encore intégré. API REST publique, pas de clé requise : https://openfoodfacts.github.io/openfoodfacts-server/api/. Doit couvrir les produits emballés/marques (complète CIQUAL qui est faible sur ce segment).
+1. **CIQUAL (Anses)** ✅ importé et corrigé — 3341/3341 lignes du fichier source, toutes valides. Couvre bien les aliments bruts/génériques français (viandes, légumes, féculents...).
+   - ⚠️ **Historique d'un bug corrigé** : un premier import n'avait chargé que 2841 lignes. La cause réelle n'était **pas** des doublons de `code_ciqual` (il n'y en a aucun dans le fichier source), mais un échec silencieux sur les notations texte utilisées par CIQUAL pour les valeurs infimes (`< 0,5`, `traces`) et les décimales en virgule française, non gérées par l'import initial. Ce bug supprimait en priorité les aliments bruts (fruits/légumes crus ont souvent des lipides "< 0,5"), biaisant mécaniquement la base restante vers les plats préparés. Réimport complet effectué le 2026-08-19 avec parsing corrigé (virgule → point, valeurs trace → 0, lignes sans kcal exclues). Script/valeurs générés à la volée, pas conservés en repo — si un nouvel import est nécessaire, repartir du fichier source `Jeux de données/Table Ciqual 2025_FR_2025_11_03.xlsx` avec la même logique de nettoyage.
+2. **Open Food Facts** ✅ intégré (recherche combinée avec CIQUAL dans `app/src/lib/foodSearch.js`, endpoint `api/v2/search`). API REST publique, pas de clé requise. Leur infrastructure publique renvoie des `503` de façon intermittente — l'app gère déjà la dégradation (CIQUAL continue de fonctionner seul, message d'avertissement à l'utilisateur).
 3. **USDA FoodData Central** — reporté en V2, pour compléments alimentaires/produits sportifs US.
 
 ## Fonctionnalités V1 (validées avec Paul, ne pas dévier sans son accord)
@@ -70,7 +71,13 @@ Supabase Auth email/mot de passe activé par défaut. Pas encore de code front-e
 
 ## Code
 
-Aucun code front-end existant à réutiliser — tout reste à construire à partir de zéro.
+Projet Vite + React dans `app/`. État actuel :
+- ✅ Authentification (email/mot de passe via Supabase Auth) — `src/context/AuthContext.jsx`, `src/pages/Auth.jsx`
+- ✅ Objectifs macro (formulaire + carte visuelle avec donut chart) — `src/components/GoalsCard.jsx`, `GoalsForm.jsx`, `src/lib/goals.js`
+- ✅ Journal alimentaire (recherche CIQUAL + Open Food Facts, ajout par poids pesé, totaux du jour) — `src/components/FoodSearch.jsx`, `DailyTotals.jsx`, `FoodLogList.jsx`, `src/lib/foodSearch.js`, `foodLog.js`
+- ⏳ Suivi du poids corporel avec courbe — pas encore fait
+- ⏳ Historique des jours passés — pas encore fait
+- ⏳ Déploiement Vercel — pas encore fait
 
 ## Style de collaboration attendu par Paul
 
@@ -81,8 +88,11 @@ Aucun code front-end existant à réutiliser — tout reste à construire à par
 
 ## Prochaines étapes suggérées
 
-1. Récupérer auprès de Paul l'URL Supabase et les clés API nécessaires
-2. Décider de l'environnement/méthode de déploiement avec Claude Code
-3. Construire l'authentification (écran connexion/inscription)
-4. Intégrer Open Food Facts (API, pas de clé nécessaire)
-5. Construire les écrans de recherche d'aliments, journal quotidien, courbe de poids
+1. ~~Récupérer auprès de Paul l'URL Supabase et les clés API nécessaires~~ ✅
+2. ~~Décider de l'environnement/méthode de déploiement~~ ✅ Vercel
+3. ~~Construire l'authentification~~ ✅
+4. ~~Intégrer Open Food Facts~~ ✅
+5. ~~Construire les écrans de recherche d'aliments, journal quotidien~~ ✅
+6. Suivi du poids corporel avec courbe (`body_weight_log`, table déjà prête)
+7. Historique des jours passés
+8. Déploiement Vercel

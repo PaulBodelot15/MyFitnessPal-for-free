@@ -1,121 +1,160 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useEffect, useState } from 'react'
+import { AuthProvider, useAuth } from './context/AuthContext'
+import { fetchActiveGoal, saveGoal } from './lib/goals'
+import { fetchLogForDate, addFoodLogEntry, deleteFoodLogEntry, todayISO } from './lib/foodLog'
+import { DEFAULT_GOALS } from './constants/defaultGoals'
+import Auth from './pages/Auth'
+import GoalsCard from './components/GoalsCard'
+import GoalsForm from './components/GoalsForm'
+import DailyTotals from './components/DailyTotals'
+import FoodSearch from './components/FoodSearch'
+import FoodLogList from './components/FoodLogList'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
+function Dashboard() {
+  const { user, signOut } = useAuth()
+  const [goal, setGoal] = useState(null)
+  const [goalsLoading, setGoalsLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const [entries, setEntries] = useState([])
+  const [entriesLoading, setEntriesLoading] = useState(true)
+  const [searching, setSearching] = useState(false)
+  const date = todayISO()
+
+  useEffect(() => {
+    let cancelled = false
+    fetchActiveGoal(user.id)
+      .then((data) => {
+        if (!cancelled) setGoal(data)
+      })
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setGoalsLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [user.id])
+
+  useEffect(() => {
+    let cancelled = false
+    fetchLogForDate(user.id, date)
+      .then((data) => !cancelled && setEntries(data))
+      .catch((err) => !cancelled && setError(err.message))
+      .finally(() => !cancelled && setEntriesLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [user.id, date])
+
+  async function handleAddFood(food, poidsG) {
+    const entry = await addFoodLogEntry(user.id, date, food, poidsG)
+    setEntries((prev) => [...prev, entry])
+    setSearching(false)
+  }
+
+  async function handleDeleteFood(id) {
+    await deleteFoodLogEntry(id)
+    setEntries((prev) => prev.filter((e) => e.id !== id))
+  }
+
+  async function handleSave(values) {
+    setSaving(true)
+    setError(null)
+    try {
+      const newGoal = await saveGoal(user.id, values)
+      setGoal(newGoal)
+      setEditing(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
+    <div className="dashboard">
+      <header className="dashboard-header">
+        <span className="dashboard-brand">MyFitnessPal for free</span>
+        <div className="dashboard-header-right">
+          <span className="dashboard-user">{user.email}</span>
+          <button type="button" className="btn-secondary" onClick={signOut}>
+            Se déconnecter
+          </button>
         </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
+      <main className="dashboard-main">
+        {error && <p className="auth-error">{error}</p>}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        {goalsLoading && <p className="dashboard-placeholder">Chargement de tes objectifs…</p>}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        {!goalsLoading && editing && (
+          <GoalsForm
+            initialValues={goal ?? DEFAULT_GOALS}
+            saving={saving}
+            onCancel={() => setEditing(false)}
+            onSave={handleSave}
+          />
+        )}
+
+        {!goalsLoading && !editing && goal && (
+          <GoalsCard goal={goal} onEdit={() => setEditing(true)} />
+        )}
+
+        {!goalsLoading && !editing && !goal && (
+          <div className="goals-empty">
+            <p>Tu n'as pas encore d'objectif enregistré.</p>
+            <button type="button" className="btn-primary" onClick={() => setEditing(true)}>
+              Définir mes objectifs
+            </button>
+          </div>
+        )}
+
+        {goal && !editing && (
+          <section className="food-log-section">
+            {entriesLoading ? (
+              <p className="dashboard-placeholder">Chargement du journal…</p>
+            ) : (
+              <DailyTotals entries={entries} goal={goal} />
+            )}
+
+            {searching ? (
+              <FoodSearch onAdd={handleAddFood} onClose={() => setSearching(false)} />
+            ) : (
+              <div className="food-log-card">
+                <div className="food-log-card-header">
+                  <h2>Journal du jour</h2>
+                  <button type="button" className="btn-primary" onClick={() => setSearching(true)}>
+                    + Ajouter un aliment
+                  </button>
+                </div>
+                <FoodLogList entries={entries} onDelete={handleDeleteFood} />
+              </div>
+            )}
+          </section>
+        )}
+
+        <p className="dashboard-placeholder">Prochaine étape : suivi du poids corporel.</p>
+      </main>
+    </div>
+  )
+}
+
+function AppContent() {
+  const { session, loading } = useAuth()
+
+  if (loading) return <div className="loading-screen">Chargement…</div>
+
+  return session ? <Dashboard /> : <Auth />
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 
