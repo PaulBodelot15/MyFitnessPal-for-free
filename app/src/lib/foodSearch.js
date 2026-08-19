@@ -21,23 +21,29 @@ export async function searchCiqual(query) {
   }))
 }
 
-// Recherche via l'API publique Open Food Facts (produits emballés/marques).
-// Note : cette API publique renvoie des 503 de façon intermittente (vérifié : environ
-// 1 requête sur 4 en échec). On retente une fois automatiquement avant d'abandonner —
-// l'appelant gère ensuite l'échec définitif sans bloquer la recherche CIQUAL.
+// Recherche Open Food Facts, via une Supabase Edge Function (off-search) qui relaie
+// vers l'API officielle "search-a-licious" (search.openfoodfacts.org/search).
+// Pourquoi un relais et pas un appel direct depuis le navigateur : search-a-licious
+// fait une vraie recherche plein texte et est fiable, mais ne renvoie pas les en-têtes
+// CORS nécessaires — un navigateur bloque donc la réponse (testé : ça marche en curl,
+// pas dans l'app). L'ancien essai direct sur world.openfoodfacts.org/api/v2/search
+// avait le CORS mais ignorait silencieusement le terme de recherche. L'edge function
+// contourne les deux problèmes : elle appelle search-a-licious côté serveur (pas de
+// CORS entre serveurs) et renvoie le résultat à l'app avec les en-têtes corrects.
 export async function searchOpenFoodFacts(query) {
-  const url = `https://world.openfoodfacts.org/api/v2/search?search_terms=${encodeURIComponent(
-    query
-  )}&page_size=15&fields=code,product_name,product_name_fr,nutriments`
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/off-search?q=${encodeURIComponent(query)}`
 
-  const json = await fetchWithRetry(url)
+  const json = await fetchWithRetry(url, {
+    Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  })
 
-  return (json.products || [])
-    .filter((p) => (p.product_name || p.product_name_fr) && p.nutriments?.['energy-kcal_100g'] != null)
+  return (json.hits || [])
+    .filter((p) => p.product_name && p.nutriments?.['energy-kcal_100g'] != null)
     .map((p) => ({
       source: 'openfoodfacts',
       id: `off-${p.code}`,
-      nom_aliment: p.product_name_fr || p.product_name,
+      nom_aliment: p.product_name,
       kcal_100g: round(p.nutriments['energy-kcal_100g']),
       proteines_100g: round(p.nutriments['proteins_100g']),
       lipides_100g: round(p.nutriments['fat_100g']),
@@ -45,11 +51,11 @@ export async function searchOpenFoodFacts(query) {
     }))
 }
 
-async function fetchWithRetry(url, attempts = 3) {
+async function fetchWithRetry(url, headers = {}, attempts = 3) {
   let lastError
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(url)
+      const res = await fetch(url, { headers })
       if (res.ok) return await res.json()
       lastError = new Error(`Open Food Facts a répondu ${res.status}`)
     } catch (err) {
