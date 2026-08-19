@@ -559,50 +559,10 @@
 
 /* --- Journal alimentaire --- */
 
-.sortable-list {
+.card-list {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-}
-
-.sortable-card {
-  transition: transform 0.15s ease;
-}
-
-.sortable-card-dragging {
-  z-index: 10;
-  filter: drop-shadow(0 12px 28px rgba(20, 30, 50, 0.18));
-}
-
-.sortable-card-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 1.3rem;
-  cursor: grab;
-  touch-action: none;
-}
-
-.sortable-card-handle:active {
-  cursor: grabbing;
-}
-
-.sortable-card-grip {
-  width: 34px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--border);
-  transition: background 0.15s ease, width 0.15s ease;
-}
-
-.sortable-card-handle:hover .sortable-card-grip {
-  background: var(--ink-soft);
-  width: 42px;
-}
-
-.sortable-card-dragging .sortable-card-grip {
-  background: var(--ink-soft);
-  width: 42px;
 }
 
 .kcal-remaining {

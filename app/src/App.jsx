@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react'
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from '@dnd-kit/core'
-import { SortableContext, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { fetchActiveGoal, saveGoal } from './lib/goals'
 import { fetchLogForDate, addFoodLogEntry, deleteFoodLogEntry, todayISO } from './lib/foodLog'
@@ -17,9 +15,8 @@ import WeightChart from './components/WeightChart'
 import WeightForm from './components/WeightForm'
 import WeightLogList from './components/WeightLogList'
 import CalorieHeatmap from './components/CalorieHeatmap'
-import SortableCard from './components/SortableCard'
 import { useTheme } from './hooks/useTheme'
-import { useCardOrder } from './hooks/useCardOrder'
+import { CARD_ORDER } from './constants/cards'
 import './App.css'
 
 function Dashboard() {
@@ -42,18 +39,6 @@ function Dashboard() {
 
   const [dailyTotals, setDailyTotals] = useState({})
   const [dailyTotalsLoading, setDailyTotalsLoading] = useState(true)
-
-  const [cardOrder, setCardOrder] = useCardOrder()
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  )
-
-  function handleDragEnd({ active, over }) {
-    if (over && active.id !== over.id) {
-      setCardOrder((prev) => arrayMove(prev, prev.indexOf(active.id), prev.indexOf(over.id)))
-    }
-  }
 
   useEffect(() => {
     let cancelled = false
@@ -250,21 +235,17 @@ function Dashboard() {
       <main className="dashboard-main">
         {error && <p className="auth-error">{error}</p>}
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={cardOrder} strategy={verticalListSortingStrategy}>
-            <div className="sortable-list">
-              {cardOrder.map((id) => {
-                const content = renderCard(id)
-                if (!content) return null
-                return (
-                  <SortableCard key={id} id={id}>
-                    {content}
-                  </SortableCard>
-                )
-              })}
-            </div>
-          </SortableContext>
-        </DndContext>
+        <div className="card-list">
+          {CARD_ORDER.map((id) => {
+            const content = renderCard(id)
+            if (!content) return null
+            return (
+              <div key={id} className="card-list-item">
+                {content}
+              </div>
+            )
+          })}
+        </div>
       </main>
     </div>
   )
