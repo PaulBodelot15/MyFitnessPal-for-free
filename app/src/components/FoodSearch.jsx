@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { searchCiqual, searchOpenFoodFacts } from '../lib/foodSearch'
+import { searchCustomFoods, addCustomFood } from '../lib/customFoods'
+import { fetchPortionsForFood, addPortion } from '../lib/foodPortions'
+import { useAuth } from '../context/AuthContext'
+import ManualFoodForm from './ManualFoodForm'
+import PortionPicker from './PortionPicker'
 
 export default function FoodSearch({ onAdd, onClose }) {
+  const { user } = useAuth()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [selected, setSelected] = useState(null)
-  const [poids, setPoids] = useState('')
-  const [adding, setAdding] = useState(false)
   const [offDown, setOffDown] = useState(false)
+  const [selected, setSelected] = useState(null)
+  const [creatingManual, setCreatingManual] = useState(false)
+  const [adding, setAdding] = useState(false)
   const debounceRef = useRef(null)
 
   useEffect(() => {
@@ -28,16 +34,18 @@ export default function FoodSearch({ onAdd, onClose }) {
     setError(null)
     setOffDown(false)
     try {
-      const [ciqual, off] = await Promise.allSettled([
+      const [ciqual, off, custom] = await Promise.allSettled([
         searchCiqual(query),
         searchOpenFoodFacts(query),
+        searchCustomFoods(user.id, query),
       ])
       const combined = [
+        ...(custom.status === 'fulfilled' ? custom.value : []),
         ...(ciqual.status === 'fulfilled' ? ciqual.value : []),
         ...(off.status === 'fulfilled' ? off.value : []),
       ]
       setResults(combined)
-      if (ciqual.status === 'rejected' && off.status === 'rejected') {
+      if (ciqual.status === 'rejected' && off.status === 'rejected' && custom.status === 'rejected') {
         setError('La recherche a échoué. Réessaie dans un instant.')
       } else if (off.status === 'rejected') {
         setOffDown(true)
@@ -47,14 +55,22 @@ export default function FoodSearch({ onAdd, onClose }) {
     }
   }
 
-  async function handleAdd() {
-    const poidsNum = Number(poids)
-    if (!poidsNum || poidsNum <= 0) return
+  async function handleManualCreate(values) {
     setAdding(true)
     try {
-      await onAdd(selected, poidsNum)
+      const food = await addCustomFood(user.id, values)
+      setCreatingManual(false)
+      setSelected(food)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function handleAdd(poidsG) {
+    setAdding(true)
+    try {
+      await onAdd(selected, poidsG)
       setSelected(null)
-      setPoids('')
       setQuery('')
       setResults([])
     } finally {
@@ -62,44 +78,39 @@ export default function FoodSearch({ onAdd, onClose }) {
     }
   }
 
+  if (creatingManual) {
+    return (
+      <div className="food-search-panel">
+        <button type="button" className="food-search-back" onClick={() => setCreatingManual(false)}>
+          ← Retour à la recherche
+        </button>
+        <ManualFoodForm onSubmit={handleManualCreate} onCancel={() => setCreatingManual(false)} saving={adding} />
+      </div>
+    )
+  }
+
   if (selected) {
-    const ratio = (Number(poids) || 0) / 100
     return (
       <div className="food-search-panel">
         <button type="button" className="food-search-back" onClick={() => setSelected(null)}>
           ← Retour à la recherche
         </button>
         <h3>{selected.nom_aliment}</h3>
-        <span className="food-source-tag">{sourceLabel(selected.source)}</span>
-
-        <label className="goals-form-field" style={{ marginTop: '1rem' }}>
-          Poids pesé (g)
-          <input
-            type="number"
-            autoFocus
-            value={poids}
-            onChange={(e) => setPoids(e.target.value)}
-            placeholder="ex: 150"
-          />
-        </label>
-
-        {poids > 0 && (
-          <div className="food-preview">
-            <span>{round(selected.kcal_100g * ratio)} kcal</span>
-            <span>{round(selected.proteines_100g * ratio)} g prot.</span>
-            <span>{round(selected.lipides_100g * ratio)} g lip.</span>
-            <span>{round(selected.glucides_100g * ratio)} g gluc.</span>
-          </div>
-        )}
-
-        <div className="goals-form-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>
-            Annuler
-          </button>
-          <button type="button" className="btn-primary" onClick={handleAdd} disabled={!poids || adding}>
-            {adding ? 'Ajout…' : 'Ajouter au journal'}
-          </button>
+        <div className="food-result-macros">
+          <span>{selected.kcal_100g} kcal</span>
+          <span>P {selected.proteines_100g} g</span>
+          <span>L {selected.lipides_100g} g</span>
+          <span>G {selected.glucides_100g} g</span>
+          <span className="food-result-macros-note">/ 100 g</span>
         </div>
+
+        <PortionPicker
+          food={selected}
+          userId={user.id}
+          adding={adding}
+          onConfirm={handleAdd}
+          onCancel={onClose}
+        />
       </div>
     )
   }
@@ -120,11 +131,15 @@ export default function FoodSearch({ onAdd, onClose }) {
         </button>
       </div>
 
+      <button type="button" className="food-search-manual-btn" onClick={() => setCreatingManual(true)}>
+        + Créer un aliment manuellement
+      </button>
+
       {loading && <p className="dashboard-placeholder">Recherche…</p>}
       {error && <p className="auth-error">{error}</p>}
       {offDown && (
         <p className="food-search-notice">
-          Open Food Facts est momentanément indisponible — résultats CIQUAL uniquement pour l'instant.
+          Open Food Facts est momentanément indisponible — résultats CIQUAL/perso uniquement pour l'instant.
         </p>
       )}
       {!loading && query.trim().length >= 2 && results.length === 0 && !error && (
@@ -136,9 +151,12 @@ export default function FoodSearch({ onAdd, onClose }) {
           <li key={food.id}>
             <button type="button" className="food-result-item" onClick={() => setSelected(food)}>
               <span className="food-result-name">{food.nom_aliment}</span>
-              <span className="food-result-meta">
-                <span className="food-source-tag">{sourceLabel(food.source)}</span>
-                {food.kcal_100g} kcal/100g
+              <span className="food-result-macros">
+                <span>{food.kcal_100g} kcal</span>
+                <span>P {food.proteines_100g} g</span>
+                <span>L {food.lipides_100g} g</span>
+                <span>G {food.glucides_100g} g</span>
+                <span className="food-result-macros-note">/ 100 g</span>
               </span>
             </button>
           </li>
@@ -148,10 +166,3 @@ export default function FoodSearch({ onAdd, onClose }) {
   )
 }
 
-function sourceLabel(source) {
-  return source === 'ciqual' ? 'CIQUAL' : 'Open Food Facts'
-}
-
-function round(n) {
-  return Math.round((n || 0) * 10) / 10
-}

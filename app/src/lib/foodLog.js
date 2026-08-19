@@ -1,9 +1,8 @@
 import { supabase } from './supabase'
+import { dateToISO } from './dates'
 
 export function todayISO() {
-  const d = new Date()
-  const offset = d.getTimezoneOffset()
-  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10)
+  return dateToISO(new Date())
 }
 
 export async function fetchLogForDate(userId, date) {
@@ -18,14 +17,16 @@ export async function fetchLogForDate(userId, date) {
   return data
 }
 
-// `food` = un résultat de recherche (kcal_100g, proteines_100g, ...), `poidsG` = poids pesé en grammes.
-export async function addFoodLogEntry(userId, date, food, poidsG) {
+// `food` = un résultat de recherche (kcal_100g, proteines_100g, ...), `poidsG` = poids pesé en grammes,
+// `repas` = 'petit_dejeuner' | 'dejeuner' | 'gouter' | 'diner' | 'collation'.
+export async function addFoodLogEntry(userId, date, food, poidsG, repas) {
   const ratio = poidsG / 100
   const { data, error } = await supabase
     .from('food_log')
     .insert({
       user_id: userId,
       date,
+      repas,
       nom_aliment: food.nom_aliment,
       source: food.source,
       poids_g: poidsG,

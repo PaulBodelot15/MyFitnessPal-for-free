@@ -1,24 +1,45 @@
 import { supabase } from './supabase'
 
+// Classe les résultats par pertinence : un aliment dont le nom commence par le
+// terme cherché (ex: "Riz blanc, cru" pour "riz") passe avant un aliment où le
+// terme apparaît juste au milieu d'un nom de plat composé (ex: "Salade de riz
+// au thon..."). À égalité, le nom le plus court (plus générique) est priorisé.
+// Nécessaire car ciqual_foods a souvent 40+ correspondances sur un mot courant
+// (riz, poulet, pain...) et sans ce tri, une simple LIMIT SQL sans ORDER BY
+// coupe dans un ordre non garanti — l'aliment de base peut ne jamais apparaître.
+export function rankByRelevance(items, query, field) {
+  const q = query.trim().toLowerCase()
+  return [...items].sort((a, b) => {
+    const an = a[field].toLowerCase()
+    const bn = b[field].toLowerCase()
+    const aStarts = an.startsWith(q) ? 0 : 1
+    const bStarts = bn.startsWith(q) ? 0 : 1
+    if (aStarts !== bStarts) return aStarts - bStarts
+    return an.length - bn.length
+  })
+}
+
 // Recherche dans la base CIQUAL (référence française, aliments bruts/génériques).
 export async function searchCiqual(query) {
   const { data, error } = await supabase
     .from('ciqual_foods')
     .select('code_ciqual, nom_aliment, kcal_100g, proteines_100g, lipides_100g, glucides_100g')
     .ilike('nom_aliment', `%${query}%`)
-    .limit(15)
+    .limit(60)
 
   if (error) throw error
 
-  return data.map((f) => ({
-    source: 'ciqual',
-    id: `ciqual-${f.code_ciqual}`,
-    nom_aliment: f.nom_aliment,
-    kcal_100g: f.kcal_100g,
-    proteines_100g: f.proteines_100g,
-    lipides_100g: f.lipides_100g,
-    glucides_100g: f.glucides_100g,
-  }))
+  return rankByRelevance(data, query, 'nom_aliment')
+    .slice(0, 15)
+    .map((f) => ({
+      source: 'ciqual',
+      id: `ciqual-${f.code_ciqual}`,
+      nom_aliment: f.nom_aliment,
+      kcal_100g: f.kcal_100g,
+      proteines_100g: f.proteines_100g,
+      lipides_100g: f.lipides_100g,
+      glucides_100g: f.glucides_100g,
+    }))
 }
 
 // Recherche Open Food Facts, via une Supabase Edge Function (off-search) qui relaie

@@ -1,10 +1,12 @@
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
+
 const MACRO_COLORS = {
   proteines: '#e0518a',
   lipides: '#4f8ef7',
   glucides: '#f5a623',
 }
 
-export default function DailyTotals({ entries, goal }) {
+export default function DailyTotals({ entries, goal, onEditGoal }) {
   const totals = entries.reduce(
     (acc, e) => ({
       kcal: acc.kcal + e.kcal,
@@ -17,13 +19,27 @@ export default function DailyTotals({ entries, goal }) {
 
   const kcalRestant = Math.round(goal.kcal_cible - totals.kcal)
 
+  const kcalProteines = totals.proteines_g * 4
+  const kcalLipides = totals.lipides_g * 9
+  const kcalGlucides = totals.glucides_g * 4
+  const kcalConsommes = kcalProteines + kcalLipides + kcalGlucides
+
+  const donutData = [
+    { name: 'Protéines', value: kcalProteines, color: MACRO_COLORS.proteines },
+    { name: 'Lipides', value: kcalLipides, color: MACRO_COLORS.lipides },
+    { name: 'Glucides', value: kcalGlucides, color: MACRO_COLORS.glucides },
+  ]
+
   return (
     <div className="goals-card">
       <div className="goals-card-header">
         <div>
           <h2>Aujourd'hui</h2>
           <p className="goals-date">
-            {Math.round(totals.kcal)} / {goal.kcal_cible} kcal
+            Objectif : {goal.kcal_cible} kcal ·{' '}
+            <button type="button" className="link-btn" onClick={onEditGoal}>
+              Modifier
+            </button>
           </p>
         </div>
         <div className={`kcal-remaining ${kcalRestant < 0 ? 'kcal-over' : ''}`}>
@@ -38,25 +54,57 @@ export default function DailyTotals({ entries, goal }) {
         />
       </div>
 
-      <div className="goals-macros" style={{ marginTop: '1.25rem' }}>
-        <MacroProgress
-          color={MACRO_COLORS.proteines}
-          label="Protéines"
-          value={totals.proteines_g}
-          target={goal.proteines_g}
-        />
-        <MacroProgress
-          color={MACRO_COLORS.lipides}
-          label="Lipides"
-          value={totals.lipides_g}
-          target={goal.lipides_g}
-        />
-        <MacroProgress
-          color={MACRO_COLORS.glucides}
-          label="Glucides"
-          value={totals.glucides_g}
-          target={goal.glucides_g}
-        />
+      <div className="goals-body">
+        <div className="goals-donut">
+          {kcalConsommes > 0 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie
+                  data={donutData}
+                  dataKey="value"
+                  innerRadius={58}
+                  outerRadius={80}
+                  paddingAngle={3}
+                  startAngle={90}
+                  endAngle={-270}
+                >
+                  {donutData.map((entry) => (
+                    <Cell key={entry.name} fill={entry.color} stroke="none" />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="goals-donut-empty">Rien ajouté pour l'instant</div>
+          )}
+          {kcalConsommes > 0 && (
+            <div className="goals-donut-center">
+              <span className="goals-donut-kcal">{Math.round(totals.kcal)}</span>
+              <span className="goals-donut-label">kcal consommés</span>
+            </div>
+          )}
+        </div>
+
+        <div className="goals-macros">
+          <MacroProgress
+            color={MACRO_COLORS.proteines}
+            label="Protéines"
+            value={totals.proteines_g}
+            target={goal.proteines_g}
+          />
+          <MacroProgress
+            color={MACRO_COLORS.lipides}
+            label="Lipides"
+            value={totals.lipides_g}
+            target={goal.lipides_g}
+          />
+          <MacroProgress
+            color={MACRO_COLORS.glucides}
+            label="Glucides"
+            value={totals.glucides_g}
+            target={goal.glucides_g}
+          />
+        </div>
       </div>
     </div>
   )

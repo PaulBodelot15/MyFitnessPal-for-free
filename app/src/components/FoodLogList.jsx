@@ -1,6 +1,6 @@
-export default function FoodLogList({ entries, onDelete }) {
+export default function FoodLogList({ entries, onDelete, emptyMessage = "Aucun aliment ajouté aujourd'hui." }) {
   if (entries.length === 0) {
-    return <p className="dashboard-placeholder">Aucun aliment ajouté aujourd'hui.</p>
+    return <p className="dashboard-placeholder">{emptyMessage}</p>
   }
 
   return (
